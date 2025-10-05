@@ -11,7 +11,7 @@ app.use(cors()); // allows frontend connection
 app.use(express.json()); // lets express handle JSON requests
 
 // 🧩 WAITLIST ROUTE — to receive and store waitlist entries
-app.post("https://joyxora-landingpage-mvp-backend-production.up.railway.app/", (req, res) => {
+app.post("/", (req, res) => {
   const { name, email } = req.body;
 
   // check if email is missing
@@ -44,7 +44,7 @@ app.post("https://joyxora-landingpage-mvp-backend-production.up.railway.app/", (
 });
 
 // 💰 FUNDERS ROUTE — to collect funders' info
-app.post("https://joyxora-landingpage-mvp-backend-production.up.railway.app/", (req, res) => {
+app.post("/", (req, res) => {
   const { name, email, amount } = req.body;
 
   if (!email) {
