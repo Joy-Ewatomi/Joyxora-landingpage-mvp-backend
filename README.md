@@ -9,13 +9,12 @@ It handles form submissions, database communication, and serves as the bridge be
   Handles waitlist form/funder form submissions 
   (CORS) enabled for frontend access
   Simple, secure, and easy to extend
-  Ready for deployment on Render, Vercel, or Railway
-
+  
 ## 🛠️ Tech Stack
 
   **Node.js**
   **Express.js**
   **CORS**
-  **dotenv**
+  
  
 
