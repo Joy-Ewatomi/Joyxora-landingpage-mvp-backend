@@ -1,0 +1,36 @@
+[
+  {
+    "id": 1759610128562,
+    "name": "Joy",
+    "email": "joyprog12@gmail.com",
+    "joinedAt": "2025-10-04T20:35:28.563Z"
+  },
+  {
+    "id": 1759611023226,
+    "name": "Joy",
+    "email": "joyivy387@gmail.com",
+    "amount": "100000",
+    "joinedAt": "2025-10-04T20:50:23.226Z"
+  },
+  {
+    "id": 1759611449834,
+    "name": "Joy",
+    "email": "arokoyojoy696@gmail.com",
+    "amount": "Five hundred thousand",
+    "joinedAt": "2025-10-04T20:57:29.834Z"
+  },
+  {
+    "id": 1759611911036,
+    "name": "Bimpe",
+    "email": "Bimpe2@gmail.com",
+    "amount": "200000",
+    "joinedAt": "2025-10-04T21:05:11.036Z"
+  },
+  {
+    "id": 1759612725441,
+    "name": "Momu",
+    "email": "Momu@gmail.com",
+    "amount": "20000",
+    "joinedAt": "2025-10-04T21:18:45.441Z"
+  }
+]
