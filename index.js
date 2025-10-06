@@ -20,7 +20,7 @@ app.post("/api/Waitlist", async (req, res) => {
   }
 
   // read existing waitlist data
-  const data = JSON.parse(fs.readFileSync("./data/waitlist.json", "utf8"));
+  const data = JSON.parse(fs.readFileSync("./data/Waitlist.json", "utf8"));
 
   // check if email already exists
   if (data.find((person) => person.email === email)) {
@@ -37,7 +37,7 @@ app.post("/api/Waitlist", async (req, res) => {
 
   // add it and save back to file
   data.push(newEntry);
-  fs.writeFileSync("./data/waitlist.json", JSON.stringify(data, null, 2));
+  fs.writeFileSync("./data/Waitlist.json", JSON.stringify(data, null, 2));
 
   // send success response
   res.json({ success: true, message: "Added to waitlist!" });
@@ -52,7 +52,7 @@ app.post("/api/Funder", async (req, res) => {
   }
 
   // Read existing funders data
-  const data = JSON.parse(fs.readFileSync("./data/funders.json", "utf8"));
+  const data = JSON.parse(fs.readFileSync("./data/Funder.json", "utf8"));
 
   // Check if funder already exists
   if (data.find((person) => person.email === email)) {
@@ -70,7 +70,7 @@ app.post("/api/Funder", async (req, res) => {
 
   // Add and save back to file
   data.push(newEntry);
-  fs.writeFileSync("./data/funders.json", JSON.stringify(data, null, 2));
+  fs.writeFileSync("./data/Funder.json", JSON.stringify(data, null, 2));
 
   // Send success response
   res.json({ success: true, message: "Thank you for supporting Joyxora!" });
