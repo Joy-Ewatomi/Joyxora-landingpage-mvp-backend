@@ -11,7 +11,7 @@ app.use(express.json());
 
 // Step 3: Connect to Railway PostgreSQL
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: process.env.CONNECT_URL,
   ssl: { rejectUnauthorized: false },
 });
 
