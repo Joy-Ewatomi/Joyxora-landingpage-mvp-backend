@@ -3,13 +3,6 @@ import express from "express";
 import cors from "cors";
 import pkg from "pg";
 const { Pool } = pkg;
-import dotenv from "dotenv";
-
-dotenv.config();
-
-const PORT = process.env.PORT || 5000;
-const CONNECT_URL = process.env.CONNECT_URL;
-
 
 // Step 2: Initialize app
 const app = express();
@@ -106,5 +99,5 @@ app.get("/api/Funder", async (req, res) => {
 });
 
 // Step 5: Start server
-  PORT = process.env.PORT || 5000;
+const  PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
