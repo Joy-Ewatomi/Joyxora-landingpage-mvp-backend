@@ -2,6 +2,10 @@
 import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
+import dotenv from "dotenv"; // Import dotenv for environment variables
+
+// Load environment variables
+dotenv.config();
 
 // Step 2: Initialize the app
 const app = express();
@@ -11,22 +15,22 @@ app.use(cors()); // allows frontend connection
 app.use(express.json()); // lets express handle JSON requests
 
 // Step 4: Connect to MongoDB
-const mongoURI = "YOUR_MONGODB_CONNECTION_STRING"; // Replace with your MongoDB connection string
+const mongoURI = process.env.MONGODB_URI; // Use environment variable for MongoDB connection string
 mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
     .then(() => console.log("🚀 Connected to MongoDB"))
     .catch(err => console.error("MongoDB connection error:", err));
 
 // Step 5: Define Mongoose Schemas and Models
 const waitlistSchema = new mongoose.Schema({
-    name: String,
-    email: { type: String, unique: true },
+    name: { type: String, required: true }, // Added required validation
+    email: { type: String, required: true, unique: true }, // Added required validation
     joinedAt: { type: Date, default: Date.now },
 });
 
 const funderSchema = new mongoose.Schema({
-    name: String,
-    email: { type: String, unique: true },
-    amount: Number,
+    name: { type: String, required: true }, // Added required validation
+    email: { type: String, required: true, unique: true }, // Added required validation
+    amount: { type: Number, required: true }, // Added required validation
     joinedAt: { type: Date, default: Date.now },
 });
 
@@ -37,25 +41,21 @@ const Funder = mongoose.model("Funder", funderSchema);
 app.post("/api/Waitlist", async (req, res) => {
     const { name, email } = req.body;
 
-    // Check if email is missing
     if (!email) {
         return res.status(400).json({ success: false, error: "Email is required" });
     }
 
     try {
-        // Check if email already exists
         const existingEntry = await Waitlist.findOne({ email });
         if (existingEntry) {
             return res.status(400).json({ success: false, error: "Already on the waitlist" });
         }
 
-        // Create new entry
         const newEntry = new Waitlist({ name, email });
         await newEntry.save();
-
-        // Send success response
         res.json({ success: true, message: "Added to waitlist!" });
     } catch (err) {
+        console.error("Error adding to waitlist:", err);
         res.status(500).json({ success: false, error: "Error adding to waitlist" });
     }
 });
@@ -64,25 +64,21 @@ app.post("/api/Waitlist", async (req, res) => {
 app.post("/api/Funder", async (req, res) => {
     const { name, email, amount } = req.body;
 
-    // Check if email is missing
     if (!email) {
         return res.status(400).json({ success: false, error: "Email is required" });
     }
 
     try {
-        // Check if funder already exists
         const existingFunder = await Funder.findOne({ email });
         if (existingFunder) {
             return res.status(400).json({ success: false, error: "Already registered as a funder" });
         }
 
-        // Create a new funder entry
         const newEntry = new Funder({ name, email, amount });
         await newEntry.save();
-
-        // Send success response
         res.json({ success: true, message: "Thank you for supporting Joyxora!" });
     } catch (err) {
+        console.error("Error adding funder:", err);
         res.status(500).json({ success: false, error: "Error adding funder" });
     }
 });
