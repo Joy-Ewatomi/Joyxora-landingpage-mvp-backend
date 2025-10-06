@@ -11,6 +11,11 @@ app.use(cors()); // allows frontend connection
 app.use(express.json()); // lets express handle JSON requests
 
 // 🧩 WAITLIST ROUTE — to receive and store waitlist entries
+
+app.get("/" (req, res) => 
+ {
+   res.send("app is working");
+});
 app.post("/", (req, res) => {
   const { name, email } = req.body;
 
