@@ -106,5 +106,5 @@ app.get("/api/Funder", async (req, res) => {
 });
 
 // Step 5: Start server
-const PORT = process.env.PORT || 5000;
+  PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
