@@ -11,12 +11,7 @@ app.use(cors()); // allows frontend connection
 app.use(express.json()); // lets express handle JSON requests
 
 // 🧩 WAITLIST ROUTE — to receive and store waitlist entries
-
-app.get("/" (req, res) => 
- {
-   res.send("app is working");
-});
-app.post("/", (req, res) => {
+app.post("/api/waitlist", (req, res) => {
   const { name, email } = req.body;
 
   // check if email is missing
@@ -49,7 +44,7 @@ app.post("/", (req, res) => {
 });
 
 // 💰 FUNDERS ROUTE — to collect funders' info
-app.post("/", (req, res) => {
+app.post("/api/waitlist", (req, res) => {
   const { name, email, amount } = req.body;
 
   if (!email) {
