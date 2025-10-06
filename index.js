@@ -1,7 +1,7 @@
 // Step 1: Import the packages
 import express from "express";
 import cors from "cors";
-import fs from "fs";
+import mongoose from "mongoose";
 
 // Step 2: Initialize the app
 const app = express();
@@ -9,6 +9,29 @@ const app = express();
 // Step 3: Middleware (these run before your routes)
 app.use(cors()); // allows frontend connection
 app.use(express.json()); // lets express handle JSON requests
+
+// Step 4: Connect to MongoDB
+const mongoURI = "YOUR_MONGODB_CONNECTION_STRING"; // Replace with your MongoDB connection string
+mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
+    .then(() => console.log("🚀 Connected to MongoDB"))
+    .catch(err => console.error("MongoDB connection error:", err));
+
+// Step 5: Define Mongoose Schemas and Models
+const waitlistSchema = new mongoose.Schema({
+    name: String,
+    email: { type: String, unique: true },
+    joinedAt: { type: Date, default: Date.now },
+});
+
+const funderSchema = new mongoose.Schema({
+    name: String,
+    email: { type: String, unique: true },
+    amount: Number,
+    joinedAt: { type: Date, default: Date.now },
+});
+
+const Waitlist = mongoose.model("Waitlist", waitlistSchema);
+const Funder = mongoose.model("Funder", funderSchema);
 
 // WAITLIST ROUTE — to receive and store waitlist entries
 app.post("/api/Waitlist", async (req, res) => {
@@ -19,37 +42,22 @@ app.post("/api/Waitlist", async (req, res) => {
         return res.status(400).json({ success: false, error: "Email is required" });
     }
 
-    let data;
-    // Read existing waitlist data
     try {
-        data = JSON.parse(fs.readFileSync("./data/Waitlist.json", "utf8"));
+        // Check if email already exists
+        const existingEntry = await Waitlist.findOne({ email });
+        if (existingEntry) {
+            return res.status(400).json({ success: false, error: "Already on the waitlist" });
+        }
+
+        // Create new entry
+        const newEntry = new Waitlist({ name, email });
+        await newEntry.save();
+
+        // Send success response
+        res.json({ success: true, message: "Added to waitlist!" });
     } catch (err) {
-        return res.status(500).json({ success: false, error: "Error reading waitlist data" });
+        res.status(500).json({ success: false, error: "Error adding to waitlist" });
     }
-
-    // Check if email already exists
-    if (data.find((person) => person.email === email)) {
-        return res.status(400).json({ success: false, error: "Already on the waitlist" });
-    }
-
-    // Create new entry
-    const newEntry = {
-        id: Date.now(),
-        name,
-        email,
-        joinedAt: new Date().toISOString(),
-    };
-
-    // Add the new entry and save back to file
-    data.push(newEntry);
-    try {
-        fs.writeFileSync("./data/Waitlist.json", JSON.stringify(data, null, 2));
-    } catch (err) {
-        return res.status(500).json({ success: false, error: "Error saving to waitlist" });
-    }
-
-    // Send success response
-    res.json({ success: true, message: "Added to waitlist!" });
 });
 
 // FUNDERS ROUTE — to collect funders' info
@@ -61,44 +69,28 @@ app.post("/api/Funder", async (req, res) => {
         return res.status(400).json({ success: false, error: "Email is required" });
     }
 
-    let data;
-    // Read existing funders data
     try {
-        data = JSON.parse(fs.readFileSync("./data/Funder.json", "utf8"));
+        // Check if funder already exists
+        const existingFunder = await Funder.findOne({ email });
+        if (existingFunder) {
+            return res.status(400).json({ success: false, error: "Already registered as a funder" });
+        }
+
+        // Create a new funder entry
+        const newEntry = new Funder({ name, email, amount });
+        await newEntry.save();
+
+        // Send success response
+        res.json({ success: true, message: "Thank you for supporting Joyxora!" });
     } catch (err) {
-        return res.status(500).json({ success: false, error: "Error reading funder data" });
+        res.status(500).json({ success: false, error: "Error adding funder" });
     }
-
-    // Check if funder already exists
-    if (data.find((person) => person.email === email)) {
-        return res.status(400).json({ success: false, error: "Already registered as a funder" });
-    }
-
-    // Create a new funder entry
-    const newEntry = {
-        id: Date.now(),
-        name,
-        email,
-        amount,
-        joinedAt: new Date().toISOString(),
-    };
-
-    // Add and save back to file
-    data.push(newEntry);
-    try {
-        fs.writeFileSync("./data/Funder.json", JSON.stringify(data, null, 2));
-    } catch (err) {
-        return res.status(500).json({ success: false, error: "Error saving to funder data" });
-    }
-
-    // Send success response
-    res.json({ success: true, message: "Thank you for supporting Joyxora!" });
 });
 
-// Step 4: Choose a port
-const PORT = 5000;
+// Step 6: Choose a port
+const PORT = process.env.PORT || 5000;
 
-// Step 5: Start the server
+// Step 7: Start the server
 app.listen(PORT, () => {
     console.log(`🚀 Server is running on http://localhost:${PORT}`);
 });
