@@ -1,104 +1,103 @@
-// Step 1: Import the packages
+// Step 1: Import packages
 import express from "express";
 import cors from "cors";
-import fs from "fs";
+import pkg from "pg";
+const { Pool } = pkg;
 
-// Step 2: Initialize the app
+// Step 2: Initialize app
 const app = express();
+app.use(cors());
+app.use(express.json());
 
-// Step 3: Middleware (these run before your routes)
-app.use(cors()); // allows frontend connection
-app.use(express.json()); // lets express handle JSON requests
+// Step 3: Connect to Railway PostgreSQL
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
 
-// WAITLIST ROUTE — to receive and store waitlist entries
+// Step 4: Create tables if they don’t exist
+const initDB = async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS waitlist (
+        id SERIAL PRIMARY KEY,
+        name TEXT,
+        email TEXT UNIQUE,
+        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS funder (
+        id SERIAL PRIMARY KEY,
+        name TEXT,
+        email TEXT UNIQUE,
+        amount TEXT,
+        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    console.log("✅ PostgreSQL tables ready!");
+  } catch (err) {
+    console.error("❌ Error setting up database:", err);
+  }
+};
+initDB();
+
+// ===================== WAITLIST ROUTES =====================
 app.post("/api/Waitlist", async (req, res) => {
-    const { name, email } = req.body;
+  const { name, email } = req.body;
+  if (!email) return res.status(400).json({ success: false, error: "Email is required" });
 
-    // Check if email is missing
-    if (!email) {
-        return res.status(400).json({ success: false, error: "Email is required" });
-    }
-
-    let data;
-    // Read existing waitlist data
-    try {
-        data = JSON.parse(fs.readFileSync("./data/Waitlist.json", "utf8"));
-    } catch (err) {
-        return res.status(500).json({ success: false, error: "Error reading waitlist data" });
-    }
-
-    // Check if email already exists
-    if (data.find((person) => person.email === email)) {
-        return res.status(400).json({ success: false, error: "Already on the waitlist" });
-    }
-
-    // Create new entry
-    const newEntry = {
-        id: Date.now(),
-        name,
-        email,
-        joinedAt: new Date().toISOString(),
-    };
-
-    // Add the new entry and save back to file
-    data.push(newEntry);
-    try {
-        fs.writeFileSync("./data/Waitlist.json", JSON.stringify(data, null, 2));
-    } catch (err) {
-        return res.status(500).json({ success: false, error: "Error saving to waitlist" });
-    }
-
-    // Send success response
+  try {
+    await pool.query("INSERT INTO waitlist (name, email) VALUES ($1, $2)", [name, email]);
     res.json({ success: true, message: "Added to waitlist!" });
+  } catch (err) {
+    if (err.code === "23505")
+      return res.status(400).json({ success: false, error: "Already on the waitlist" });
+    console.error(err);
+    res.status(500).json({ success: false, error: "Database error" });
+  }
 });
 
-// FUNDERS ROUTE — to collect funders' info
+app.get("/api/Waitlist", async (req, res) => {
+  try {
+    const { rows } = await pool.query("SELECT * FROM waitlist ORDER BY joined_at DESC");
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: "Error fetching waitlist data" });
+  }
+});
+
+// ===================== FUNDER ROUTES =====================
 app.post("/api/Funder", async (req, res) => {
-    const { name, email, amount } = req.body;
+  const { name, email, amount } = req.body;
+  if (!email) return res.status(400).json({ success: false, error: "Email is required" });
 
-    // Check if email is missing
-    if (!email) {
-        return res.status(400).json({ success: false, error: "Email is required" });
-    }
-
-    let data;
-    // Read existing funders data
-    try {
-        data = JSON.parse(fs.readFileSync("./data/Funder.json", "utf8"));
-    } catch (err) {
-        return res.status(500).json({ success: false, error: "Error reading funder data" });
-    }
-
-    // Check if funder already exists
-    if (data.find((person) => person.email === email)) {
-        return res.status(400).json({ success: false, error: "Already registered as a funder" });
-    }
-
-    // Create a new funder entry
-    const newEntry = {
-        id: Date.now(),
-        name,
-        email,
-        amount,
-        joinedAt: new Date().toISOString(),
-    };
-
-    // Add and save back to file
-    data.push(newEntry);
-    try {
-        fs.writeFileSync("./data/Funder.json", JSON.stringify(data, null, 2));
-    } catch (err) {
-        return res.status(500).json({ success: false, error: "Error saving to funder data" });
-    }
-
-    // Send success response
+  try {
+    await pool.query("INSERT INTO funder (name, email, amount) VALUES ($1, $2, $3)", [
+      name,
+      email,
+      amount,
+    ]);
     res.json({ success: true, message: "Thank you for supporting Joyxora!" });
+  } catch (err) {
+    if (err.code === "23505")
+      return res.status(400).json({ success: false, error: "Already registered as a funder" });
+    console.error(err);
+    res.status(500).json({ success: false, error: "Database error" });
+  }
 });
 
-// Step 4: Choose a port
-const PORT = 5000;
-
-// Step 5: Start the server
-app.listen(PORT, () => {
-    console.log(`🚀 Server is running on http://localhost:${PORT}`);
+app.get("/api/Funder", async (req, res) => {
+  try {
+    const { rows } = await pool.query("SELECT * FROM funder ORDER BY joined_at DESC");
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: "Error fetching funders" });
+  }
 });
+
+// Step 5: Start server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
