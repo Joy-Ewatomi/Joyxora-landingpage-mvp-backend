@@ -18,7 +18,7 @@ app.use(express.json());
 const isProduction = process.env.NODE_ENV === "production";
 
 const pool = new Pool({
-  connectionString: isProduction ? process.env.CONNECT_URL : process.env.LOCAL_DB_URL,
+  connectionString: isProduction ? process.env.DATABASE_URL : process.env.LOCAL_DB_URL,
   ssl: isProduction ? { rejectUnauthorized: false } : false,
 });
 
