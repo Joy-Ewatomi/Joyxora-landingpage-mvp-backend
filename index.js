@@ -1,21 +1,28 @@
+// ==================== index.js ====================
+
 // Step 1: Import packages
 import express from "express";
 import cors from "cors";
 import pkg from "pg";
+import dotenv from "dotenv";
+
 const { Pool } = pkg;
+dotenv.config();
 
 // Step 2: Initialize app
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Step 3: Connect to Railway PostgreSQL
+// Step 3: Set up database connection
+const isProduction = process.env.NODE_ENV === "production";
+
 const pool = new Pool({
-  connectionString: process.env.CONNECT_URL,
-  ssl: { rejectUnauthorized: false },
+  connectionString: isProduction ? process.env.CONNECT_URL : process.env.LOCAL_DB_URL,
+  ssl: isProduction ? { rejectUnauthorized: false } : false,
 });
 
-// Step 4: Create tables if they don’t exist
+// Step 4: Initialize tables
 const initDB = async () => {
   try {
     await pool.query(`
@@ -99,5 +106,5 @@ app.get("/api/Funder", async (req, res) => {
 });
 
 // Step 5: Start server
-const  PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
