@@ -5,6 +5,7 @@ import express from "express";
 import cors from "cors";
 import pkg from "pg";
 import dotenv from "dotenv";
+import bcrypt from "bcryptjs"; // ✅ Secure password hashing
 
 const { Pool } = pkg;
 dotenv.config();
@@ -25,6 +26,7 @@ const pool = new Pool({
 // Step 4: Initialize tables
 const initDB = async () => {
   try {
+    // Waitlist table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS waitlist (
         id SERIAL PRIMARY KEY,
@@ -34,6 +36,7 @@ const initDB = async () => {
       );
     `);
 
+    // Funder table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS funder (
         id SERIAL PRIMARY KEY,
@@ -44,12 +47,24 @@ const initDB = async () => {
       );
     `);
 
+    // Signup table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS signup (
+        id SERIAL PRIMARY KEY,
+        username TEXT UNIQUE,
+        email TEXT UNIQUE,
+        password TEXT,
+        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     console.log("✅ PostgreSQL tables ready!");
   } catch (err) {
     console.error("❌ Error setting up database:", err);
   }
 };
 initDB();
+
 
 // ===================== WAITLIST ROUTES =====================
 app.post("/api/Waitlist", async (req, res) => {
@@ -75,6 +90,7 @@ app.get("/api/Waitlist", async (req, res) => {
     res.status(500).json({ error: "Error fetching waitlist data" });
   }
 });
+
 
 // ===================== FUNDER ROUTES =====================
 app.post("/api/Funder", async (req, res) => {
@@ -105,7 +121,65 @@ app.get("/api/Funder", async (req, res) => {
   }
 });
 
-// Step 5: Start server
+
+// ===================== SIGNUP ROUTE =====================
+app.post("/api/signup", async (req, res) => {
+  const { email, username, password } = req.body;
+
+  if (!email || !username || !password)
+    return res.status(400).json({ success: false, error: "All fields are required" });
+
+  try {
+    // Check if user already exists
+    const existing = await pool.query(
+      "SELECT * FROM signup WHERE email = $1 OR username = $2",
+      [email, username]
+    );
+    if (existing.rows.length > 0)
+      return res.status(400).json({ success: false, error: "User already exists" });
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await pool.query(
+      "INSERT INTO signup (email, username, password) VALUES ($1, $2, $3)",
+      [email, username, hashedPassword]
+    );
+
+    res.json({ success: true, message: "You are now a member of Joyxora!" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Database error" });
+  }
+});
+
+
+// ===================== SIGNIN ROUTE =====================
+app.post("/api/signin", async (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password)
+    return res.status(400).json({ success: false, error: "Username and password required" });
+
+  try {
+    const { rows } = await pool.query("SELECT * FROM signup WHERE username = $1", [username]);
+    const user = rows[0];
+
+    if (!user)
+      return res.status(400).json({ success: false, error: "User not found" });
+
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword)
+      return res.status(401).json({ success: false, error: "Invalid credentials" });
+
+    res.json({ success: true, message: `Welcome back, ${user.username}!` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Database error" });
+  }
+});
+
+
+// ===================== SERVER START =====================
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-
