@@ -155,7 +155,7 @@ app.get("/api/Funder", async (req, res) => {
 // ==================== AUTH ROUTES =====================
 
 // ✅ FIXED: Sign Up (with /auth/ prefix and email support)
-app.post("/api/auth/signup", async (req, res) => {
+app.post("/api/signup", async (req, res) => {
   const { email, password } = req.body; // Frontend sends email, not username
   if (!email || !password)
     return res.status(400).json({ message: "Email and password are required" });
