@@ -1,5 +1,4 @@
 // ==================== index.js ====================
-
 import express from "express";
 import cors from "cors";
 import pkg from "pg";
@@ -23,15 +22,16 @@ const pool = new Pool({
   ssl: isProduction ? { rejectUnauthorized: false } : false,
 });
 
-// Initialize tables (signup + waitlist + funder)
+// Initialize tables
 const initDB = async () => {
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS signup (
         id SERIAL PRIMARY KEY,
         username TEXT UNIQUE,
-        email TEXT UNIQUE,
-        password TEXT,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        email_verified BOOLEAN DEFAULT FALSE,
         reset_token TEXT,
         reset_expires TIMESTAMP,
         joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -77,7 +77,7 @@ const transporter = nodemailer.createTransport({
 const generateToken = (user) => {
   return jwt.sign(
     { id: user.id, email: user.email, username: user.username },
-    process.env.JWT_SECRET,
+    process.env.JWT_SECRET || "your-secret-key-change-this",
     { expiresIn: "7d" }
   );
 };
@@ -88,7 +88,7 @@ const verifyToken = (req, res, next) => {
 
   const token = authHeader.split(" ")[1];
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "your-secret-key-change-this");
     req.user = decoded;
     next();
   } catch {
@@ -96,8 +96,7 @@ const verifyToken = (req, res, next) => {
   }
 };
 
-// ==================== WAITLIST ROUTES (public) =====================
-// Keep using the same endpoints you had before to avoid breaking the frontend
+// ==================== WAITLIST ROUTES =====================
 app.post("/api/Waitlist", async (req, res) => {
   const { name, email } = req.body;
   if (!email) return res.status(400).json({ success: false, error: "Email is required" });
@@ -123,7 +122,7 @@ app.get("/api/Waitlist", async (req, res) => {
   }
 });
 
-// ==================== FUNDER ROUTES (public) =====================
+// ==================== FUNDER ROUTES =====================
 app.post("/api/Funder", async (req, res) => {
   const { name, email, amount } = req.body;
   if (!email) return res.status(400).json({ success: false, error: "Email is required" });
@@ -153,132 +152,213 @@ app.get("/api/Funder", async (req, res) => {
   }
 });
 
-// ==================== SIGNUP =====================
-app.post("/api/signup", async (req, res) => {
-  const { email, username, password } = req.body;
-  if (!email || !username || !password)
-    return res.status(400).json({ success: false, error: "All fields are required" });
+// ==================== AUTH ROUTES =====================
+
+// ✅ FIXED: Sign Up (with /auth/ prefix and email support)
+app.post("/api/auth/signup", async (req, res) => {
+  const { email, password } = req.body; // Frontend sends email, not username
+  if (!email || !password)
+    return res.status(400).json({ message: "Email and password are required" });
+
+  if (password.length < 8)
+    return res.status(400).json({ message: "Password must be at least 8 characters" });
 
   try {
-    const existing = await pool.query(
-      "SELECT * FROM signup WHERE email = $1 OR username = $2",
-      [email, username]
-    );
+    // Check if user exists
+    const existing = await pool.query("SELECT * FROM signup WHERE email = $1", [email]);
     if (existing.rows.length > 0)
-      return res.status(400).json({ success: false, error: "User already exists" });
+      return res.status(400).json({ message: "User already exists" });
 
+    // Generate username from email (before @)
+    const username = email.split('@')[0];
+
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create user
     const { rows } = await pool.query(
-      "INSERT INTO signup (email, username, password) VALUES ($1, $2, $3) RETURNING id, username, email",
+      "INSERT INTO signup (email, username, password) VALUES ($1, $2, $3) RETURNING id, username, email, joined_at",
       [email, username, hashedPassword]
     );
     const user = rows[0];
 
-    // Send welcome email (fire-and-forget; log errors)
+    // Send welcome email (optional)
     transporter.sendMail({
       from: `"Joyxora Team" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: "Welcome to Joyxora 💚",
+      subject: "Welcome to Joyxora 🐱",
       html: `
         <div style="font-family:Arial;max-width:600px;margin:auto;padding:20px;border-radius:10px;background:#f8fff8;">
-          <h2 style="color:#0f5132;">Welcome, ${username}!</h2>
+          <h2 style="color:#10b981;">Welcome, ${username}!</h2>
           <p>Thank you for joining <b>Joyxora</b>. Your account has been created successfully.</p>
+          <p>Start encrypting your files and chatting securely today!</p>
         </div>
       `,
     }).catch((err) => console.error("Welcome email error:", err));
 
+    // Generate token
     const token = generateToken(user);
-    res.json({ success: true, message: "Signup successful", token, user });
+    res.status(201).json({
+      message: "Account created successfully",
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        createdAt: user.joined_at
+      }
+    });
   } catch (err) {
     console.error("Signup error:", err);
-    res.status(500).json({ success: false, error: "Database error" });
+    res.status(500).json({ message: "Server error during signup" });
   }
 });
 
-// ==================== SIGNIN =====================
+// ✅ FIXED: Sign In (with /auth/ prefix and email support)
 app.post("/api/signin", async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password)
-    return res.status(400).json({ success: false, error: "Username and password required" });
+  const { email, password } = req.body; // Frontend sends email
+
+  if (!email || !password)
+    return res.status(400).json({ message: "Email and password required" });
 
   try {
-    const { rows } = await pool.query("SELECT * FROM signup WHERE username = $1", [username]);
+    // Find user by email
+    const { rows } = await pool.query("SELECT * FROM signup WHERE email = $1", [email]);
     const user = rows[0];
-    if (!user) return res.status(400).json({ success: false, error: "User not found" });
 
+    if (!user)
+      return res.status(401).json({ message: "Invalid email or password" });
+
+    // Verify password
     const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) return res.status(401).json({ success: false, error: "Invalid credentials" });
-
+    if (!validPassword)
+      return res.status(401).json({ message: "Invalid email or password" });
+   // Generate token
     const token = generateToken(user);
-    res.json({ success: true, message: "Login successful", token, user: { id: user.id, username: user.username, email: user.email } });
+    res.json({
+      message: "Sign in successful",
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        createdAt: user.joined_at
+      }
+    });
   } catch (err) {
     console.error("Signin error:", err);
-    res.status(500).json({ success: false, error: "Database error" });
+    res.status(500).json({ message: "Server error during signin" });
   }
 });
 
-// ==================== FORGOT PASSWORD =====================
+// ✅ FIXED: Forgot Password (with /auth/ prefix and query param URL)
 app.post("/api/forgot-password", async (req, res) => {
   const { email } = req.body;
-  if (!email) return res.status(400).json({ success: false, error: "Email is required" });
+  if (!email) return res.status(400).json({ message: "Email is required" });
 
   try {
     const { rows } = await pool.query("SELECT * FROM signup WHERE email = $1", [email]);
     const user = rows[0];
-    if (!user) return res.status(400).json({ success: false, error: "No account with that email" });
 
+    // Always return success (don't reveal if email exists)
+    if (!user) {
+      return res.json({ message: "If that email exists, we sent a reset link." });
+    }
+
+    // Generate reset token
     const token = crypto.randomBytes(32).toString("hex");
-    const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    await pool.query("UPDATE signup SET reset_token=$1, reset_expires=$2 WHERE email=$3", [token, expires, email]);
+    await pool.query(
+      "UPDATE signup SET reset_token=$1, reset_expires=$2 WHERE email=$3",
+      [token, expires, email]
+    );
 
-    const resetLink = `${process.env.FRONTEND_URL}/reset-password/${token}`;
+    // ✅ FIXED: Use query parameter instead of path parameter
+    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
+
     transporter.sendMail({
       from: `"Joyxora Support" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: "Reset your Joyxora password 🔑",
       html: `
-        <div style="font-family:Arial;max-width:600px;margin:auto;padding:20px;border-radius:10px;background:#fff;">
-          <h2 style="color:#155724;">Password Reset Request</h2>
+        <div style="font-family:Arial;max-width:600px;margin:auto;padding:20px;border-radius:10px;background:#fff;border:1px solid #10b981;">
+          <h2 style="color:#10b981;">Password Reset Request</h2>
           <p>Hello ${user.username},</p>
           <p>Click below to reset your password:</p>
-          <a href="${resetLink}" style="display:inline-block;margin-top:10px;padding:10px 20px;background:#198754;color:white;border-radius:6px;text-decoration:none;">Reset Password</a>
-          <p>This link will expire in 15 minutes.</p>
+          <a href="${resetLink}" style="display:inline-block;margin-top:10px;padding:12px 24px;background:#10b981;color:white;border-radius:8px;text-decoration:none;font-weight:bold;">Reset Password</a>
+          <p style="color:#666;font-size:12px;margin-top:20px;">This link expires in 1 hour.</p>
+          <p style="color:#666;font-size:12px;">If you didn't request this, please ignore this email.</p>
         </div>
       `,
     }).catch((err) => console.error("Reset email error:", err));
 
-    res.json({ success: true, message: "Password reset email sent" });
+    res.json({ message: "If that email exists, we sent a reset link." });
   } catch (err) {
     console.error("Forgot-password error:", err);
-    res.status(500).json({ success: false, error: "Error sending reset email" });
+    res.status(500).json({ message: "Server error" });
   }
 });
 
-// ==================== RESET PASSWORD =====================
+// ✅ FIXED: Reset Password (with /auth/ prefix)
 app.post("/api/reset-password", async (req, res) => {
   const { token, newPassword } = req.body;
-  if (!token || !newPassword) return res.status(400).json({ success: false, error: "Missing token or password" });
+
+  if (!token || !newPassword)
+    return res.status(400).json({ message: "Token and new password required" });
+
+  if (newPassword.length < 8)
+    return res.status(400).json({ message: "Password must be at least 8 characters" });
 
   try {
-    const { rows } = await pool.query("SELECT * FROM signup WHERE reset_token=$1 AND reset_expires > NOW()", [token]);
+    const { rows } = await pool.query(
+      "SELECT * FROM signup WHERE reset_token=$1 AND reset_expires > NOW()",
+      [token]
+    );
     const user = rows[0];
-    if (!user) return res.status(400).json({ success: false, error: "Invalid or expired token" });
 
+    if (!user)
+      return res.status(400).json({ message: "Invalid or expired reset token" });
+
+    // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await pool.query("UPDATE signup SET password=$1, reset_token=NULL, reset_expires=NULL WHERE id=$2", [hashedPassword, user.id]);
+    // Update password and clear token
+    await pool.query(
+      "UPDATE signup SET password=$1, reset_token=NULL, reset_expires=NULL WHERE id=$2",
+      [hashedPassword, user.id]
+    );
 
-    res.json({ success: true, message: "Password has been reset successfully" });
+    res.json({ message: "Password reset successfully! You can now sign in." });
   } catch (err) {
     console.error("Reset-password error:", err);
-    res.status(500).json({ success: false, error: "Server error" });
+    res.status(500).json({ message: "Server error" });
+  }
+});
+// ✅ FIXED: Get current user (with /auth/ prefix)
+app.get("/api/me", verifyToken, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT id, username, email, joined_at FROM signup WHERE id=$1",
+      [req.user.id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({ user: rows[0] });
+  } catch (err) {
+    console.error("User fetch error:", err);
+    res.status(500).json({ message: "Could not fetch user" });
   }
 });
 
-// ==================== PROTECTED ROUTE (example) =====================
+// ==================== PROFILE ROUTE (protected) =====================
 app.get("/api/profile", verifyToken, async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT id, username, email, joined_at FROM signup WHERE id=$1", [req.user.id]);
+    const { rows } = await pool.query(
+      "SELECT id, username, email, joined_at FROM signup WHERE id=$1",
+      [req.user.id]
+    );
     res.json({ success: true, user: rows[0] });
   } catch (err) {
     console.error("Profile fetch error:", err);
